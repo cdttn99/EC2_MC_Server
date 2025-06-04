@@ -1,0 +1,21 @@
+#!/bin/bash
+
+SCREEN_NAME="mc-server"
+MC_USER="ubuntu"
+MC_DIR="/home/ubuntu/minecraft"
+
+# Broadcast shutdown warning
+sudo -u $MC_USER screen -S $SCREEN_NAME -X stuff "say Server shutting down in 30 seconds! $(printf '\r')"
+sleep 20
+sudo -u $MC_USER screen -S $SCREEN_NAME -X stuff "say Server shutting down in 10 seconds! $(printf '\r')"
+sleep 10
+
+# Save world and shutdown
+sudo -u $MC_USER screen -S $SCREEN_NAME -X stuff "save-all$(printf '\r')"
+sleep 2
+sudo -u $MC_USER screen -S $SCREEN_NAME -X stuff "stop$(printf '\r')"
+
+# Wait for server to stop
+while pgrep -u $MC_USER -f "java.*server.jar" > /dev/null; do
+  sleep 1
+done

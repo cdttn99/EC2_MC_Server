@@ -1,0 +1,81 @@
+---
+- name: Minecraft server Configurator
+  hosts: minecraft_servers
+  become: true
+  vars: 
+    download_url: "https://piston-data.mojang.com/v1/objects/e6ec2f64e6080b9b5d9b471b291c33cc7f509733/server.jar"
+    minecraft_home: /home/ubuntu/minecraft
+    minecraft_user: ubuntu
+    user_home: /home/ubuntu
+    server_jar: "server.jar"
+    xms: "2G"
+    xmx: "4G"
+
+  tasks:
+    - name: isntall minecrafts dependencies
+      package:
+        name:
+          - openjdk-21-jdk
+          - wget
+          - screen
+          - curl
+        state: present
+
+    - name: Create Minecraft directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ minecraft_user }}"
+        mode: '0755'
+      loop:
+        - "{{ minecraft_home }}"
+        - "{{ minecraft_home }}/backups"
+        - "{{ minecraft_home }}/logs"
+
+    - name: Download Minecraft
+      get_url:
+        url: "{{ download_url }}"
+        dest: "{{ minecraft_home }}"
+        owner: "{{ minecraft_user }}"
+        mode: '0644'
+
+    - name: Create eula.txt
+      copy:
+        dest:
+        content: |
+          #By changing the setting below to TRUE you are indicating your agreement to our EULA (https://aka.ms/MinecraftEULA).
+          eula=true
+        owner:
+        mode: '0644'
+
+    - name: Create minecraft systemd service
+      template: 
+        src: templates/minecraft.service.j2
+        dest: /etc/systemd/system/minecraft.service
+        mode: '0644'
+      notify: 
+        - Reload systemd
+        - Enable and start Minecraft service
+
+    - name: Create shutdown hook script
+      template:
+        src: templates/shutdown-hook.sh.j2
+        dest: /usr/local/bin/minecraft-shutdown-hook
+        mode: '0755'
+
+    - name: Initial server start to generate world
+      command: >
+        java -Xms{{ xms }} -Xmx{{ xmx }} -jar {{ server_jar }} nogui
+        chdir="{{ minecraft_home }}"
+        creates="{{ minecraft_home }}/world"
+      become_user: "{{ minecraft_user }}"
+
+  handlers:
+    - name: Reload systemd
+      command: systemctl daemon-reexec
+
+    - name: Enable and start Minecraft service
+      systemd:
+        name: minecraft
+        enabled: yes
+        state: started
